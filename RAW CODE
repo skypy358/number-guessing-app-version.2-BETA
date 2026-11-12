@@ -1,0 +1,183 @@
+import random
+import tkinter as tk
+
+
+BG = "#121212"
+CARD = "#1e1e1e"
+FG = "#e6e6e6"
+MUTED = "#8a8a8a"
+ACCENT = "#7c4dff"
+ACCENT_HOVER = "#9575ff"
+GOOD = "#4caf50"
+BAD = "#ef5350"
+WARN = "#ffb300"
+
+DIFFICULTIES = {
+    "Easy":   {"max": 50,  "tries": 10},
+    "Medium": {"max": 100, "tries": 7},
+    "Hard":   {"max": 500, "tries": 9},
+}
+
+
+class HoverButton(tk.Button):
+    """Flat button with a hover effect."""
+
+    def __init__(self, master, **kw):
+        self.base = kw.pop("bg", ACCENT)
+        self.hover = kw.pop("hover", ACCENT_HOVER)
+        super().__init__(
+            master, bg=self.base, fg="white", activebackground=self.hover,
+            activeforeground="white", relief="flat", bd=0, cursor="hand2",
+            font=("Segoe UI", 11, "bold"), padx=14, pady=8, **kw,
+        )
+        self.bind("<Enter>", lambda e: self.config(bg=self.hover))
+        self.bind("<Leave>", lambda e: self.config(bg=self.base))
+
+
+class GuessingGame(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Shawn's Number Guessing Game")
+        self.geometry("420x560")
+        self.resizable(True, True)
+        self.configure(bg=BG)
+
+        self.difficulty = tk.StringVar(value="Medium")
+        self.best = {name: None for name in DIFFICULTIES}
+        self.build_ui()
+        self.new_game()
+
+    # ---------- UI ----------
+    def build_ui(self):
+        tk.Label(self, text="🎯 Guess the Number", bg=BG, fg=FG,
+                 font=("Segoe UI", 20, "bold")).pack(pady=(24, 4))
+        self.range_label = tk.Label(self, bg=BG, fg=MUTED, font=("Segoe UI", 11))
+        self.range_label.pack()
+
+        # Difficulty selector
+        diff_frame = tk.Frame(self, bg=BG)
+        diff_frame.pack(pady=14)
+        for name in DIFFICULTIES:
+            tk.Radiobutton(
+                diff_frame, text=name, value=name, variable=self.difficulty,
+                command=self.new_game, indicatoron=False, bg=CARD, fg=FG,
+                selectcolor=ACCENT, activebackground=ACCENT, activeforeground="white",
+                relief="flat", bd=0, padx=14, pady=6, cursor="hand2",
+                font=("Segoe UI", 10),
+            ).pack(side="left", padx=4)
+
+        # Card with stats
+        card = tk.Frame(self, bg=CARD)
+        card.pack(padx=30, pady=8, fill="x")
+
+        stats = tk.Frame(card, bg=CARD)
+        stats.pack(pady=(16, 6))
+        self.tries_label = tk.Label(stats, bg=CARD, fg=FG, font=("Segoe UI", 11))
+        self.tries_label.grid(row=0, column=0, padx=16)
+        self.best_label = tk.Label(stats, bg=CARD, fg=FG, font=("Segoe UI", 11))
+        self.best_label.grid(row=0, column=1, padx=16)
+
+        self.message = tk.Label(card, text="", bg=CARD, fg=FG, wraplength=330,
+                                font=("Segoe UI", 15, "bold"), height=3)
+        self.message.pack(pady=6, padx=10)
+
+        self.entry = tk.Entry(
+            card, justify="center", font=("Segoe UI", 22), bg=BG, fg=FG,
+            insertbackground=FG, relief="flat", width=8,
+            highlightthickness=2, highlightbackground="#333", highlightcolor=ACCENT,
+        )
+        self.entry.pack(pady=10, ipady=6)
+        self.entry.bind("<Return>", lambda e: self.check_guess())
+
+        self.guess_btn = HoverButton(card, text="Guess", command=self.check_guess)
+        self.guess_btn.pack(pady=(4, 18))
+
+        # History
+        tk.Label(self, text="Previous guesses", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 10)).pack(pady=(14, 2))
+        self.history = tk.Label(self, bg=BG, fg=FG, wraplength=360,
+                                font=("Consolas", 11), justify="center")
+        self.history.pack()
+
+        HoverButton(self, text="New Game", bg=CARD, hover="#2c2c2c",
+                    command=self.new_game).pack(pady=18)
+
+    # ---------- Game logic ----------
+    def new_game(self):
+        cfg = DIFFICULTIES[self.difficulty.get()]
+        self.max_num = cfg["max"]
+        self.max_tries = cfg["tries"]
+        self.secret = random.randint(1, self.max_num)
+        self.tries = 0
+        self.guesses = []
+        self.game_over = False
+
+        self.range_label.config(text=f"Shawn is thinking of a number between 1 and {self.max_num}")
+        self.message.config(text="Make your first guess!", fg=FG)
+        self.history.config(text="—")
+        self.entry.config(state="normal")
+        self.entry.delete(0, "end")
+        self.entry.focus_set()
+        self.guess_btn.config(state="normal")
+        self.update_stats()
+
+    def update_stats(self):
+        left = self.max_tries - self.tries
+        self.tries_label.config(text=f"Tries left: {left}")
+        best = self.best[self.difficulty.get()]
+        self.best_label.config(text=f"Best: {best if best else '—'}")
+
+    def check_guess(self):
+        if self.game_over:
+            return
+        text = self.entry.get().strip()
+        self.entry.delete(0, "end")
+
+        if not text.lstrip("-").isdigit():
+            self.message.config(text="Please enter a whole number.", fg=WARN)
+            return
+        guess = int(text)
+        if not 1 <= guess <= self.max_num:
+            self.message.config(text=f"Pick a number from 1 to {self.max_num}.", fg=WARN)
+            return
+        if guess in self.guesses:
+            self.message.config(text=f"You already tried {guess}!", fg=WARN)
+            return
+
+        self.tries += 1
+        self.guesses.append(guess)
+        self.history.config(text="  ".join(map(str, self.guesses)))
+
+        if guess == self.secret:
+            self.win()
+        elif self.tries >= self.max_tries:
+            self.lose()
+        else:
+            diff = abs(guess - self.secret)
+            hot = diff <= max(2, self.max_num // 20)
+            direction = "Too low ⬆️" if guess < self.secret else "Too high ⬇️"
+            suffix = "\n🔥 Very close!" if hot else ""
+            self.message.config(text=direction + suffix, fg=BAD if not hot else WARN)
+        self.update_stats()
+
+    def win(self):
+        name = self.difficulty.get()
+        self.message.config(text=f"🎉 Correct! The number was {self.secret}\n"
+                                 f"Solved in {self.tries} tries", fg=GOOD)
+        if self.best[name] is None or self.tries < self.best[name]:
+            self.best[name] = self.tries
+        self.end_game()
+
+    def lose(self):
+        self.message.config(text=f"💀 Out of tries!\nThe number was {self.secret}", fg=BAD)
+        self.end_game()
+
+    def end_game(self):
+        self.game_over = True
+        self.entry.config(state="disabled")
+        self.guess_btn.config(state="disabled")
+        self.update_stats()
+
+
+if __name__ == "__main__":
+    GuessingGame().mainloop()
